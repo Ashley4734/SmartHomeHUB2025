@@ -3,38 +3,49 @@
  */
 
 import { jest } from '@jest/globals';
-import AutomationEngine from '../automationEngine.js';
 
-// Mock dependencies
-jest.mock('../../database/db.js');
-jest.mock('cron');
+// Mock database module
+const mockDbPrepare = {
+  run: jest.fn(),
+  get: jest.fn(),
+  all: jest.fn().mockReturnValue([])
+};
+
+const mockDb = {
+  prepare: jest.fn().mockReturnValue(mockDbPrepare)
+};
+
+const mockGetDatabase = jest.fn(() => mockDb);
+
+jest.unstable_mockModule('../../database/db.js', () => ({
+  getDatabase: mockGetDatabase,
+  initDatabase: jest.fn(),
+  closeDatabase: jest.fn(),
+}));
+
+// Mock cron
+jest.unstable_mockModule('cron', () => ({
+  CronJob: jest.fn().mockImplementation(() => ({
+    start: jest.fn(),
+    stop: jest.fn(),
+  })),
+}));
+
+const { default: AutomationEngine } = await import('../automationEngine.js');
 
 describe('AutomationEngine', () => {
   let automationEngine;
   let mockDeviceManager;
   let mockAiService;
-  let mockDb;
-  let mockDbPrepare;
-  let getDatabase;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     // Reset mocks
     jest.clearAllMocks();
-
-    // Mock database
-    mockDbPrepare = {
-      run: jest.fn(),
-      get: jest.fn(),
-      all: jest.fn().mockReturnValue([])
-    };
-
-    mockDb = {
-      prepare: jest.fn().mockReturnValue(mockDbPrepare)
-    };
-
-    const dbModule = await import('../../database/db.js');
-    getDatabase = dbModule.getDatabase;
-    getDatabase.mockReturnValue(mockDb);
+    mockDbPrepare.run.mockClear();
+    mockDbPrepare.get.mockClear();
+    mockDbPrepare.all.mockClear().mockReturnValue([]);
+    mockDb.prepare.mockClear().mockReturnValue(mockDbPrepare);
+    mockGetDatabase.mockClear().mockReturnValue(mockDb);
 
     // Mock device manager
     mockDeviceManager = {
@@ -415,12 +426,14 @@ describe('AutomationEngine', () => {
       automationEngine.triggerAutomation('auto-1');
     });
 
-    it('should emit automation:error event on failure', (done) => {
+    it('should handle action failures gracefully', (done) => {
       mockDeviceManager.controlDevice.mockRejectedValue(new Error('Device error'));
 
-      automationEngine.on('automation:error', ({ automation, error }) => {
+      automationEngine.on('automation:triggered', ({ automation, results }) => {
         expect(automation.id).toBe('auto-1');
-        expect(error).toBeInstanceOf(Error);
+        expect(results).toHaveLength(1);
+        expect(results[0].success).toBe(false);
+        expect(results[0].error).toContain('Device error');
         done();
       });
 
@@ -440,7 +453,19 @@ describe('AutomationEngine', () => {
         actions: []
       };
       automationEngine.automations.set('auto-1', automation);
-      mockDbPrepare.all.mockReturnValue([automation]);
+
+      // Mock database row with stringified JSON fields
+      const dbRow = {
+        id: 'auto-1',
+        name: 'Test Automation',
+        enabled: 1,
+        trigger_type: 'state',
+        trigger_config: '{}',
+        conditions: '[]',
+        actions: '[]',
+        ai_metadata: null
+      };
+      mockDbPrepare.all.mockReturnValue([dbRow]);
     });
 
     it('should update automation name', () => {

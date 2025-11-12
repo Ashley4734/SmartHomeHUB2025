@@ -263,17 +263,24 @@ describe('Config Module', () => {
       process.env.NODE_ENV = 'production';
       process.env.JWT_SECRET = 'change-this-secret';
       process.env.OPENAI_ENABLED = 'true';
-      delete process.env.OPENAI_API_KEY;
+      process.env.OPENAI_API_KEY = '';
       process.env.CLAUDE_ENABLED = 'true';
-      delete process.env.CLAUDE_API_KEY;
+      process.env.CLAUDE_API_KEY = '';
 
       jest.resetModules();
       const { validateConfig } = await import('../config.js');
 
-      expect(() => validateConfig()).toThrow('Configuration errors:');
-      expect(() => validateConfig()).toThrow('JWT_SECRET must be set in production');
-      expect(() => validateConfig()).toThrow('OPENAI_API_KEY is required when OpenAI is enabled');
-      expect(() => validateConfig()).toThrow('CLAUDE_API_KEY is required when Claude is enabled');
+      let errorMessage;
+      try {
+        validateConfig();
+      } catch (error) {
+        errorMessage = error.message;
+      }
+
+      expect(errorMessage).toContain('Configuration errors:');
+      expect(errorMessage).toContain('JWT_SECRET must be set in production');
+      expect(errorMessage).toContain('OPENAI_API_KEY is required when OpenAI is enabled');
+      expect(errorMessage).toContain('CLAUDE_API_KEY is required when Claude is enabled');
     });
   });
 });

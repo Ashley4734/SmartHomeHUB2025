@@ -3,12 +3,22 @@
  */
 
 import { jest } from '@jest/globals';
-import {
+
+// Mock csrf-csrf before importing csrf.js
+jest.unstable_mockModule('csrf-csrf', () => ({
+  doubleCsrf: jest.fn(() => ({
+    generateToken: jest.fn((req, res) => 'test-csrf-token'),
+    doubleCsrfProtection: jest.fn((req, res, next) => next()),
+  })),
+}));
+
+const csrfModule = await import('../csrf.js');
+const {
   csrfProtection,
   csrfTokenEndpoint,
   csrfErrorHandler,
   generateToken
-} from '../csrf.js';
+} = csrfModule;
 
 describe('CSRF Middleware', () => {
   let req, res, next, originalEnv;

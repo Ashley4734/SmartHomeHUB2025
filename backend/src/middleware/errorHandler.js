@@ -140,15 +140,17 @@ function sendErrorProd(err, res) {
       ...(err.errors && { errors: err.errors }),
     });
   } else {
-    // Programming or unknown error: don't leak error details
+    // Programming or unknown error: log but still use status code
     logger.error('Unexpected error:', {
       error: err.message,
       stack: err.stack,
     });
 
-    res.status(500).json({
+    // Use custom status code if present, otherwise default to 500
+    const statusCode = err.statusCode || 500;
+    res.status(statusCode).json({
       status: 'error',
-      message: 'Something went wrong',
+      message: statusCode === 500 ? 'Something went wrong' : err.message,
     });
   }
 }
@@ -172,27 +174,20 @@ export function errorHandler(err, req, res, next) {
   if (process.env.NODE_ENV === 'development') {
     sendErrorDev(err, res);
   } else {
-    let error = { ...err };
-    error.message = err.message;
+    let error = err;
 
     // Handle specific error types
     if (err instanceof ZodError) {
       const zodError = handleZodError(err);
       error = new AppError(zodError.message, zodError.statusCode);
       error.errors = zodError.errors;
-    }
-
-    if (err.name === 'JsonWebTokenError') {
+    } else if (err.name === 'JsonWebTokenError') {
       const jwtError = handleJWTError();
       error = new AppError(jwtError.message, jwtError.statusCode);
-    }
-
-    if (err.name === 'TokenExpiredError') {
+    } else if (err.name === 'TokenExpiredError') {
       const expiredError = handleJWTExpiredError();
       error = new AppError(expiredError.message, expiredError.statusCode);
-    }
-
-    if (err.code === 'SQLITE_ERROR' || err.message.includes('SQLITE')) {
+    } else if (err.code === 'SQLITE_ERROR' || err.message.includes('SQLITE')) {
       const dbError = handleDatabaseError(err);
       error = new AppError(dbError.message, dbError.statusCode);
     }

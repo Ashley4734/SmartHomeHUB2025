@@ -7,6 +7,7 @@ import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 import { getDatabase } from '../database/db.js';
 import { recordFailedAttempt, resetFailedAttempts, logAuthEvent } from '../middleware/bruteForceProtection.js';
+import { recordConsent, CONSENT_TYPES } from '../services/gdpr.js';
 
 const SALT_ROUNDS = 10;
 
@@ -108,6 +109,13 @@ export async function createUser({ username, email, password, role = ROLES.USER,
     INSERT INTO users (id, username, email, password_hash, role, full_name, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `).run(userId, username, email, passwordHash, role, fullName, now, now);
+
+  // Record essential consent (required for account creation)
+  try {
+    recordConsent(userId, CONSENT_TYPES.ESSENTIAL, true, null, null);
+  } catch (error) {
+    console.error('Failed to record essential consent:', error.message);
+  }
 
   return {
     id: userId,

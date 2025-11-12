@@ -4,6 +4,9 @@
 
 import express from 'express';
 import { authenticate, requirePermission, ROLES } from '../auth/auth.js';
+import { csrfProtection, csrfTokenEndpoint } from '../middleware/csrf.js';
+import { authRateLimiter, aiRateLimiter } from '../middleware/rateLimiting.js';
+import { bruteForceProtection } from '../middleware/bruteForceProtection.js';
 
 export function setupRoutes(app, services) {
   const { auth, deviceManager, automationEngine, aiService, voiceControl, zigbeeProtocol, matterProtocol } = services;
@@ -17,10 +20,13 @@ export function setupRoutes(app, services) {
     });
   });
 
+  // CSRF token endpoint - must be called before making state-changing requests
+  app.get('/api/csrf-token', csrfTokenEndpoint);
+
   // ========== Authentication Routes ==========
 
-  // Register new user
-  app.post('/api/auth/register', async (req, res) => {
+  // Register new user - with stricter rate limiting
+  app.post('/api/auth/register', authRateLimiter, async (req, res) => {
     try {
       const { username, email, password, fullName } = req.body;
       const user = await auth.createUser({ username, email, password, fullName });
@@ -30,11 +36,16 @@ export function setupRoutes(app, services) {
     }
   });
 
-  // Login
-  app.post('/api/auth/login', async (req, res) => {
+  // Login - with stricter rate limiting and brute force protection
+  app.post('/api/auth/login', authRateLimiter, bruteForceProtection, async (req, res) => {
     try {
       const { username, password } = req.body;
-      const result = await auth.authenticateUser(username, password);
+      const result = await auth.authenticateUser(
+        username,
+        password,
+        req.ip,
+        req.headers['user-agent']
+      );
       res.json(result);
     } catch (error) {
       res.status(401).json({ error: error.message });

@@ -6,7 +6,6 @@ import express from 'express';
 import { createServer } from 'http';
 import cors from 'cors';
 import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -27,6 +26,10 @@ import requestLogger from './middleware/requestLogger.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { metricsMiddleware } from './utils/metrics.js';
 import metricsRoutes from './api/metricsRoutes.js';
+import { securityMiddleware } from './middleware/security.js';
+import { csrfProtection, csrfErrorHandler } from './middleware/csrf.js';
+import { globalRateLimiter } from './middleware/rateLimiting.js';
+import crypto from 'crypto';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -110,6 +113,7 @@ class SmartHomeHub {
 
       // Setup error handlers (must be after routes)
       this.app.use(notFoundHandler);
+      this.app.use(csrfErrorHandler);
       this.app.use(errorHandler);
 
       // Create HTTP server
@@ -133,8 +137,14 @@ class SmartHomeHub {
    * Setup Express middleware
    */
   setupMiddleware() {
-    // Security
-    this.app.use(helmet());
+    // Security - HTTPS redirect, HSTS, CSP, and other security headers
+    this.app.use(securityMiddleware);
+
+    // Additional security with Helmet
+    this.app.use(helmet({
+      contentSecurityPolicy: false, // We handle CSP ourselves
+      hsts: false // We handle HSTS ourselves
+    }));
 
     // CORS
     this.app.use(cors({
@@ -142,16 +152,15 @@ class SmartHomeHub {
       credentials: true
     }));
 
-    // Rate limiting
-    const limiter = rateLimit({
-      windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 900000, // 15 minutes
-      max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100
-    });
-    this.app.use('/api/', limiter);
+    // Per-user and per-IP rate limiting
+    this.app.use('/api/', globalRateLimiter);
 
     // Body parsing
     this.app.use(express.json({ limit: '10mb' }));
     this.app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+    // CSRF protection (applied to POST, PUT, PATCH, DELETE)
+    this.app.use(csrfProtection);
 
     // Metrics tracking
     this.app.use(metricsMiddleware);
@@ -161,24 +170,37 @@ class SmartHomeHub {
   }
 
   /**
-   * Create default admin user
+   * Create default admin user with secure random password
    */
   async createDefaultAdmin() {
     try {
       const users = auth.listUsers();
       if (users.length === 0) {
         logger.info('Creating default admin user...');
+
+        // Generate a cryptographically secure random password
+        const randomPassword = crypto.randomBytes(16).toString('base64').slice(0, 20);
+
         const admin = await auth.createUser({
           username: 'admin',
           email: 'admin@smarthome.local',
-          password: 'admin123', // Change this in production!
+          password: randomPassword,
           role: auth.ROLES.ADMIN,
           fullName: 'Administrator'
         });
-        logger.info('✓ Default admin user created');
-        logger.info('  Username: admin');
-        logger.info('  Password: admin123');
-        logger.warn('  ⚠️  IMPORTANT: Change the default password immediately!');
+
+        logger.info('╔════════════════════════════════════════════════════════════╗');
+        logger.info('║             DEFAULT ADMIN CREDENTIALS                      ║');
+        logger.info('╠════════════════════════════════════════════════════════════╣');
+        logger.info(`║  Username: admin                                           ║`);
+        logger.info(`║  Password: ${randomPassword.padEnd(42, ' ')}║`);
+        logger.info('╠════════════════════════════════════════════════════════════╣');
+        logger.warn('║  ⚠️  CRITICAL SECURITY NOTICE:                             ║');
+        logger.warn('║  1. This password is shown ONLY ONCE                       ║');
+        logger.warn('║  2. Store it securely immediately                          ║');
+        logger.warn('║  3. Change it after first login                            ║');
+        logger.warn('║  4. This message will not be shown again                   ║');
+        logger.info('╚════════════════════════════════════════════════════════════╝');
       }
     } catch (error) {
       logger.error('Failed to create default admin:', { error: error.message });

@@ -193,6 +193,32 @@ export const SCHEMA = {
       created_at INTEGER NOT NULL,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )
+  `,
+
+  auth_audit_log: `
+    CREATE TABLE IF NOT EXISTS auth_audit_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT,
+      username TEXT,
+      event_type TEXT NOT NULL,
+      ip_address TEXT,
+      user_agent TEXT,
+      success INTEGER NOT NULL,
+      error_message TEXT,
+      metadata TEXT,
+      timestamp INTEGER NOT NULL
+    )
+  `,
+
+  failed_login_attempts: `
+    CREATE TABLE IF NOT EXISTS failed_login_attempts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      identifier TEXT NOT NULL,
+      attempt_count INTEGER DEFAULT 1,
+      locked_until INTEGER,
+      last_attempt INTEGER NOT NULL,
+      UNIQUE(identifier)
+    )
   `
 };
 
@@ -212,5 +238,8 @@ export const INDEXES = [
   'CREATE INDEX IF NOT EXISTS idx_voice_commands_user ON voice_commands(user_id)',
   'CREATE INDEX IF NOT EXISTS idx_voice_commands_timestamp ON voice_commands(timestamp)',
   'CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id)',
-  'CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(read)'
+  'CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(read)',
+  'CREATE INDEX IF NOT EXISTS idx_auth_audit_user ON auth_audit_log(user_id)',
+  'CREATE INDEX IF NOT EXISTS idx_auth_audit_timestamp ON auth_audit_log(timestamp)',
+  'CREATE INDEX IF NOT EXISTS idx_failed_login_identifier ON failed_login_attempts(identifier)'
 ];

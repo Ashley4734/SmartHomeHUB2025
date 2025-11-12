@@ -50,7 +50,13 @@ export function logAuthEvent(eventData) {
       ipAddress
     });
   } catch (error) {
-    logger.error('Failed to log auth event', { error: error.message });
+    // Log the error but don't throw - audit logging should not break authentication flow
+    logger.error('Failed to log auth event', {
+      error: error.message,
+      code: error.code,
+      eventType,
+      username
+    });
   }
 }
 
@@ -168,14 +174,45 @@ export function recordFailedAttempt(identifier) {
         WHERE identifier = ?
       `).run(newCount, lockedUntil, now, identifier);
     } else {
-      // Create new record
-      db.prepare(`
-        INSERT INTO failed_login_attempts (identifier, attempt_count, last_attempt)
-        VALUES (?, 1, ?)
-      `).run(identifier, now);
+      // Create new record - use INSERT OR REPLACE to handle race conditions
+      try {
+        db.prepare(`
+          INSERT INTO failed_login_attempts (identifier, attempt_count, last_attempt)
+          VALUES (?, 1, ?)
+        `).run(identifier, now);
+      } catch (insertError) {
+        // Handle UNIQUE constraint violation (race condition)
+        if (insertError.code === 'SQLITE_CONSTRAINT' || insertError.message.includes('UNIQUE constraint failed')) {
+          // Record was created by another concurrent request, retry the update path
+          logger.debug('Concurrent insert detected, retrying update', { identifier });
+          const retry = db.prepare(`
+            SELECT id, attempt_count, last_attempt
+            FROM failed_login_attempts
+            WHERE identifier = ?
+          `).get(identifier);
+
+          if (retry) {
+            const attemptAge = now - retry.last_attempt;
+            let newCount = attemptAge >= ATTEMPT_WINDOW_MS ? 1 : retry.attempt_count + 1;
+            let lockedUntil = newCount >= MAX_FAILED_ATTEMPTS ? now + LOCKOUT_DURATION_MS : null;
+
+            db.prepare(`
+              UPDATE failed_login_attempts
+              SET attempt_count = ?, locked_until = ?, last_attempt = ?
+              WHERE identifier = ?
+            `).run(newCount, lockedUntil, now, identifier);
+          }
+        } else {
+          throw insertError;
+        }
+      }
     }
   } catch (error) {
-    logger.error('Failed to record failed attempt', { error: error.message });
+    logger.error('Failed to record failed attempt', {
+      error: error.message,
+      code: error.code,
+      identifier
+    });
   }
 }
 

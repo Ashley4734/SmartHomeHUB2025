@@ -27,16 +27,17 @@ describe('GDPR Service - Integration Tests', () => {
   });
 
   beforeEach(async () => {
-    // Clean up tables
+    // Clean up tables in correct order to respect foreign key constraints
+    // Delete child tables first, then parent tables
     const db = getDatabase();
-    db.prepare('DELETE FROM users').run();
-    db.prepare('DELETE FROM devices').run();
     db.prepare('DELETE FROM device_history').run();
     db.prepare('DELETE FROM automations').run();
     db.prepare('DELETE FROM user_consents').run();
     db.prepare('DELETE FROM data_processing_log').run();
     db.prepare('DELETE FROM data_deletion_requests').run();
     db.prepare('DELETE FROM auth_audit_log').run();
+    db.prepare('DELETE FROM devices').run();
+    db.prepare('DELETE FROM users').run();
 
     // Create test user
     testUser = await auth.createUser({

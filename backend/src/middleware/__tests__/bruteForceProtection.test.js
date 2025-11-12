@@ -3,7 +3,28 @@
  */
 
 import { jest } from '@jest/globals';
-import {
+
+// Mock database module
+const mockDbPrepare = {
+  run: jest.fn().mockReturnValue({ changes: 1 }),
+  get: jest.fn(),
+  all: jest.fn()
+};
+
+const mockDb = {
+  prepare: jest.fn().mockReturnValue(mockDbPrepare)
+};
+
+const mockGetDatabase = jest.fn(() => mockDb);
+
+jest.unstable_mockModule('../../database/db.js', () => ({
+  getDatabase: mockGetDatabase,
+  initDatabase: jest.fn(),
+  closeDatabase: jest.fn(),
+}));
+
+const bruteForceModule = await import('../bruteForceProtection.js');
+const {
   logAuthEvent,
   isLocked,
   getRemainingLockoutTime,
@@ -11,31 +32,18 @@ import {
   resetFailedAttempts,
   bruteForceProtection,
   cleanupOldAuditLogs
-} from '../bruteForceProtection.js';
-
-// Mock database
-jest.mock('../../database/db.js');
+} = bruteForceModule;
 
 describe('Brute Force Protection Middleware', () => {
-  let mockDb, mockDbPrepare, req, res, next, getDatabase;
+  let req, res, next;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     jest.clearAllMocks();
-
-    // Mock database prepare methods
-    mockDbPrepare = {
-      run: jest.fn().mockReturnValue({ changes: 1 }),
-      get: jest.fn(),
-      all: jest.fn()
-    };
-
-    mockDb = {
-      prepare: jest.fn().mockReturnValue(mockDbPrepare)
-    };
-
-    const dbModule = await import('../../database/db.js');
-    getDatabase = dbModule.getDatabase;
-    getDatabase.mockReturnValue(mockDb);
+    mockDbPrepare.run.mockClear().mockReturnValue({ changes: 1 });
+    mockDbPrepare.get.mockClear();
+    mockDbPrepare.all.mockClear();
+    mockDb.prepare.mockClear().mockReturnValue(mockDbPrepare);
+    mockGetDatabase.mockClear().mockReturnValue(mockDb);
 
     // Create mock request and response objects
     req = {
@@ -156,10 +164,11 @@ describe('Brute Force Protection Middleware', () => {
 
     it('should return false when lock has expired', () => {
       const pastTime = Date.now() - 60000; // 1 minute ago
+      const oldAttemptTime = Date.now() - (20 * 60 * 1000); // 20 minutes ago, outside the 15-minute window
       mockDbPrepare.get.mockReturnValue({
         attempt_count: 5,
         locked_until: pastTime,
-        last_attempt: Date.now() - 120000
+        last_attempt: oldAttemptTime
       });
 
       const result = isLocked('testuser');

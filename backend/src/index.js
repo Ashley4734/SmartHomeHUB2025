@@ -22,6 +22,11 @@ import AutomationEngine from './automation/automationEngine.js';
 import VoiceControl from './voice/voiceControl.js';
 import setupRoutes from './api/routes.js';
 import setupWebSocket from './websocket/websocketServer.js';
+import logger from './utils/logger.js';
+import requestLogger from './middleware/requestLogger.js';
+import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
+import { metricsMiddleware } from './utils/metrics.js';
+import metricsRoutes from './api/metricsRoutes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -42,40 +47,38 @@ class SmartHomeHub {
    */
   async initialize() {
     try {
-      console.log('');
-      console.log('╔════════════════════════════════════════╗');
-      console.log('║     Smart Home Hub - Initializing     ║');
-      console.log('╚════════════════════════════════════════╝');
-      console.log('');
+      logger.info('╔════════════════════════════════════════╗');
+      logger.info('║     Smart Home Hub - Initializing     ║');
+      logger.info('╚════════════════════════════════════════╝');
 
       // Initialize database
-      console.log('📊 Initializing database...');
+      logger.info('📊 Initializing database...');
       initDatabase();
 
       // Initialize core services
-      console.log('🔧 Initializing core services...');
+      logger.info('🔧 Initializing core services...');
       this.services.auth = auth;
       this.services.deviceManager = new DeviceManager();
       this.services.aiService = new AIService();
 
       // Initialize protocol handlers
-      console.log('📡 Initializing protocol handlers...');
+      logger.info('📡 Initializing protocol handlers...');
       if (process.env.ZIGBEE_ENABLED === 'true') {
         this.services.zigbeeProtocol = new ZigbeeProtocol(this.services.deviceManager);
         await this.services.zigbeeProtocol.start();
       } else {
-        console.log('⚠️  Zigbee protocol disabled');
+        logger.warn('⚠️  Zigbee protocol disabled');
       }
 
       if (process.env.MATTER_ENABLED === 'true') {
         this.services.matterProtocol = new MatterProtocol(this.services.deviceManager);
         await this.services.matterProtocol.start();
       } else {
-        console.log('⚠️  Matter protocol disabled');
+        logger.warn('⚠️  Matter protocol disabled');
       }
 
       // Initialize automation engine
-      console.log('⚙️  Initializing automation engine...');
+      logger.info('⚙️  Initializing automation engine...');
       this.services.automationEngine = new AutomationEngine(
         this.services.deviceManager,
         this.services.aiService
@@ -83,7 +86,7 @@ class SmartHomeHub {
 
       // Initialize voice control
       if (process.env.VOICE_ENABLED === 'true') {
-        console.log('🎤 Initializing voice control...');
+        logger.info('🎤 Initializing voice control...');
         this.services.voiceControl = new VoiceControl(
           this.services.deviceManager,
           this.services.automationEngine,
@@ -91,31 +94,37 @@ class SmartHomeHub {
         );
         await this.services.voiceControl.initialize();
       } else {
-        console.log('⚠️  Voice control disabled');
+        logger.warn('⚠️  Voice control disabled');
       }
 
       // Setup Express middleware
       this.setupMiddleware();
 
       // Setup routes
-      console.log('🌐 Setting up API routes...');
+      logger.info('🌐 Setting up API routes...');
+
+      // Metrics endpoint (before rate limiting and auth)
+      this.app.use(metricsRoutes);
+
       setupRoutes(this.app, this.services);
+
+      // Setup error handlers (must be after routes)
+      this.app.use(notFoundHandler);
+      this.app.use(errorHandler);
 
       // Create HTTP server
       this.server = createServer(this.app);
 
       // Setup WebSocket
-      console.log('🔌 Setting up WebSocket server...');
+      logger.info('🔌 Setting up WebSocket server...');
       this.io = setupWebSocket(this.server, this.services);
 
       // Create default admin user if none exists
       await this.createDefaultAdmin();
 
-      console.log('');
-      console.log('✓ Smart Home Hub initialized successfully');
-      console.log('');
+      logger.info('✓ Smart Home Hub initialized successfully');
     } catch (error) {
-      console.error('Failed to initialize Smart Home Hub:', error);
+      logger.error('Failed to initialize Smart Home Hub:', { error: error.message, stack: error.stack });
       throw error;
     }
   }
@@ -144,15 +153,11 @@ class SmartHomeHub {
     this.app.use(express.json({ limit: '10mb' }));
     this.app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+    // Metrics tracking
+    this.app.use(metricsMiddleware);
+
     // Request logging
-    this.app.use((req, res, next) => {
-      const start = Date.now();
-      res.on('finish', () => {
-        const duration = Date.now() - start;
-        console.log(`${req.method} ${req.path} - ${res.statusCode} (${duration}ms)`);
-      });
-      next();
-    });
+    this.app.use(requestLogger);
   }
 
   /**
@@ -162,7 +167,7 @@ class SmartHomeHub {
     try {
       const users = auth.listUsers();
       if (users.length === 0) {
-        console.log('Creating default admin user...');
+        logger.info('Creating default admin user...');
         const admin = await auth.createUser({
           username: 'admin',
           email: 'admin@smarthome.local',
@@ -170,13 +175,13 @@ class SmartHomeHub {
           role: auth.ROLES.ADMIN,
           fullName: 'Administrator'
         });
-        console.log('✓ Default admin user created');
-        console.log('  Username: admin');
-        console.log('  Password: admin123');
-        console.log('  ⚠️  IMPORTANT: Change the default password immediately!');
+        logger.info('✓ Default admin user created');
+        logger.info('  Username: admin');
+        logger.info('  Password: admin123');
+        logger.warn('  ⚠️  IMPORTANT: Change the default password immediately!');
       }
     } catch (error) {
-      console.error('Failed to create default admin:', error);
+      logger.error('Failed to create default admin:', { error: error.message });
     }
   }
 
@@ -188,29 +193,25 @@ class SmartHomeHub {
     const host = process.env.HOST || '0.0.0.0';
 
     this.server.listen(port, host, () => {
-      console.log('╔════════════════════════════════════════╗');
-      console.log('║     Smart Home Hub - Running          ║');
-      console.log('╚════════════════════════════════════════╝');
-      console.log('');
-      console.log(`🌐 Server listening on http://${host}:${port}`);
-      console.log(`📊 WebSocket server ready`);
-      console.log('');
-      console.log('Services:');
-      console.log(`  ✓ Device Manager: ${this.services.deviceManager.devices.size} devices`);
-      console.log(`  ✓ Automation Engine: ${this.services.automationEngine.automations.size} automations`);
-      console.log(`  ✓ AI Service: ${this.services.aiService.defaultProvider} provider`);
+      logger.info('╔════════════════════════════════════════╗');
+      logger.info('║     Smart Home Hub - Running          ║');
+      logger.info('╚════════════════════════════════════════╝');
+      logger.info(`🌐 Server listening on http://${host}:${port}`);
+      logger.info(`📊 WebSocket server ready`);
+      logger.info('Services:');
+      logger.info(`  ✓ Device Manager: ${this.services.deviceManager.devices.size} devices`);
+      logger.info(`  ✓ Automation Engine: ${this.services.automationEngine.automations.size} automations`);
+      logger.info(`  ✓ AI Service: ${this.services.aiService.defaultProvider} provider`);
       if (this.services.zigbeeProtocol) {
-        console.log(`  ✓ Zigbee Protocol: Ready`);
+        logger.info(`  ✓ Zigbee Protocol: Ready`);
       }
       if (this.services.matterProtocol) {
-        console.log(`  ✓ Matter Protocol: Ready`);
+        logger.info(`  ✓ Matter Protocol: Ready`);
       }
       if (this.services.voiceControl) {
-        console.log(`  ✓ Voice Control: Ready`);
+        logger.info(`  ✓ Voice Control: Ready`);
       }
-      console.log('');
-      console.log('Ready to accept connections! 🚀');
-      console.log('');
+      logger.info('Ready to accept connections! 🚀');
     });
   }
 
@@ -218,8 +219,7 @@ class SmartHomeHub {
    * Graceful shutdown
    */
   async shutdown() {
-    console.log('');
-    console.log('Shutting down Smart Home Hub...');
+    logger.info('Shutting down Smart Home Hub...');
 
     // Stop protocols
     if (this.services.zigbeeProtocol) {
@@ -247,7 +247,7 @@ class SmartHomeHub {
     // Close database
     closeDatabase();
 
-    console.log('✓ Smart Home Hub shut down gracefully');
+    logger.info('✓ Smart Home Hub shut down gracefully');
     process.exit(0);
   }
 }
@@ -264,7 +264,7 @@ const hub = new SmartHomeHub();
     process.on('SIGINT', () => hub.shutdown());
     process.on('SIGTERM', () => hub.shutdown());
   } catch (error) {
-    console.error('Fatal error:', error);
+    logger.error('Fatal error:', { error: error.message, stack: error.stack });
     process.exit(1);
   }
 })();

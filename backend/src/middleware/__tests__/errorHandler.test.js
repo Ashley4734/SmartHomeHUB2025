@@ -253,4 +253,239 @@ describe('Error Handler Middleware', () => {
       );
     });
   });
+
+  describe('errorHandler middleware', () => {
+    let originalEnv;
+
+    beforeEach(() => {
+      originalEnv = process.env.NODE_ENV;
+    });
+
+    afterEach(() => {
+      process.env.NODE_ENV = originalEnv;
+    });
+
+    describe('development mode', () => {
+      beforeEach(() => {
+        process.env.NODE_ENV = 'development';
+      });
+
+      test('should send full error details in development', () => {
+        const error = new AppError('Test error', 500);
+
+        errorHandler(error, req, res, next);
+
+        expect(res.status).toHaveBeenCalledWith(500);
+        expect(res.json).toHaveBeenCalledWith(
+          expect.objectContaining({
+            status: 'error',
+            message: 'Test error',
+            stack: expect.any(String),
+          })
+        );
+      });
+
+      test('should include error object in development', () => {
+        const error = new AppError('Dev error', 400);
+
+        errorHandler(error, req, res, next);
+
+        expect(res.json).toHaveBeenCalledWith(
+          expect.objectContaining({
+            error: expect.objectContaining({
+              message: 'Dev error',
+              statusCode: 400,
+            }),
+          })
+        );
+      });
+    });
+
+    describe('production mode', () => {
+      beforeEach(() => {
+        process.env.NODE_ENV = 'production';
+      });
+
+      test('should send operational errors in production', () => {
+        const error = new AppError('Operational error', 404, true);
+
+        errorHandler(error, req, res, next);
+
+        expect(res.status).toHaveBeenCalledWith(404);
+        expect(res.json).toHaveBeenCalledWith({
+          status: 'fail',
+          message: 'Operational error',
+        });
+      });
+
+      test('should hide details of non-operational errors', () => {
+        const error = new Error('Programming error');
+        error.isOperational = false;
+
+        errorHandler(error, req, res, next);
+
+        expect(res.status).toHaveBeenCalledWith(500);
+        expect(res.json).toHaveBeenCalledWith({
+          status: 'error',
+          message: 'Something went wrong',
+        });
+      });
+
+      test('should include validation errors array', () => {
+        const error = new AppError('Validation failed', 400);
+        error.errors = [{ field: 'email', message: 'Invalid email' }];
+
+        errorHandler(error, req, res, next);
+
+        expect(res.json).toHaveBeenCalledWith(
+          expect.objectContaining({
+            errors: [{ field: 'email', message: 'Invalid email' }],
+          })
+        );
+      });
+    });
+
+    describe('Zod validation errors', () => {
+      test('should handle Zod validation errors', () => {
+        process.env.NODE_ENV = 'production';
+
+        const schema = z.object({ email: z.string().email() });
+        let zodError;
+
+        try {
+          schema.parse({ email: 'invalid' });
+        } catch (err) {
+          zodError = err;
+        }
+
+        errorHandler(zodError, req, res, next);
+
+        expect(res.status).toHaveBeenCalledWith(400);
+        expect(res.json).toHaveBeenCalledWith(
+          expect.objectContaining({
+            message: 'Validation failed',
+            errors: expect.arrayContaining([
+              expect.objectContaining({
+                field: expect.any(String),
+                message: expect.any(String),
+              }),
+            ]),
+          })
+        );
+      });
+    });
+
+    describe('JWT errors', () => {
+      test('should handle JsonWebTokenError', () => {
+        process.env.NODE_ENV = 'production';
+
+        const error = new Error('jwt malformed');
+        error.name = 'JsonWebTokenError';
+
+        errorHandler(error, req, res, next);
+
+        expect(res.status).toHaveBeenCalledWith(401);
+        expect(res.json).toHaveBeenCalledWith(
+          expect.objectContaining({
+            message: 'Invalid token. Please log in again.',
+          })
+        );
+      });
+
+      test('should handle TokenExpiredError', () => {
+        process.env.NODE_ENV = 'production';
+
+        const error = new Error('jwt expired');
+        error.name = 'TokenExpiredError';
+
+        errorHandler(error, req, res, next);
+
+        expect(res.status).toHaveBeenCalledWith(401);
+        expect(res.json).toHaveBeenCalledWith(
+          expect.objectContaining({
+            message: 'Your token has expired. Please log in again.',
+          })
+        );
+      });
+    });
+
+    describe('database errors', () => {
+      test('should handle UNIQUE constraint errors', () => {
+        process.env.NODE_ENV = 'production';
+
+        const error = new Error('UNIQUE constraint failed');
+        error.code = 'SQLITE_ERROR';
+
+        errorHandler(error, req, res, next);
+
+        expect(res.status).toHaveBeenCalledWith(409);
+        expect(res.json).toHaveBeenCalledWith(
+          expect.objectContaining({
+            message: 'A record with this value already exists',
+          })
+        );
+      });
+
+      test('should handle FOREIGN KEY constraint errors', () => {
+        process.env.NODE_ENV = 'production';
+
+        const error = new Error('FOREIGN KEY constraint failed');
+        error.code = 'SQLITE_ERROR';
+
+        errorHandler(error, req, res, next);
+
+        expect(res.status).toHaveBeenCalledWith(400);
+        expect(res.json).toHaveBeenCalledWith(
+          expect.objectContaining({
+            message: 'Invalid reference to related record',
+          })
+        );
+      });
+
+      test('should handle generic SQLITE errors', () => {
+        process.env.NODE_ENV = 'production';
+
+        const error = new Error('SQLITE database error');
+        error.code = 'SQLITE_ERROR';
+
+        errorHandler(error, req, res, next);
+
+        expect(res.status).toHaveBeenCalledWith(500);
+        expect(res.json).toHaveBeenCalledWith(
+          expect.objectContaining({
+            message: 'Database operation failed',
+          })
+        );
+      });
+
+      test('should handle errors with SQLITE in message', () => {
+        process.env.NODE_ENV = 'production';
+
+        const error = new Error('Something SQLITE related');
+
+        errorHandler(error, req, res, next);
+
+        expect(res.status).toHaveBeenCalledWith(500);
+      });
+    });
+
+    describe('default status codes', () => {
+      test('should default to 500 status code', () => {
+        const error = new Error('Unknown error');
+
+        errorHandler(error, req, res, next);
+
+        expect(res.status).toHaveBeenCalledWith(500);
+      });
+
+      test('should use existing status code if present', () => {
+        const error = new Error('Custom error');
+        error.statusCode = 418;
+
+        errorHandler(error, req, res, next);
+
+        expect(res.status).toHaveBeenCalledWith(418);
+      });
+    });
+  });
 });

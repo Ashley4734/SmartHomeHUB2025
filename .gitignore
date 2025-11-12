@@ -38,6 +38,10 @@ build/
 out/
 .cache/
 
+# Test coverage
+coverage/
+*.lcov
+
 # Temporary files
 tmp/
 temp/

@@ -7,6 +7,7 @@ import { authenticate, requirePermission, ROLES } from '../auth/auth.js';
 import { csrfProtection, csrfTokenEndpoint } from '../middleware/csrf.js';
 import { authRateLimiter, aiRateLimiter } from '../middleware/rateLimiting.js';
 import { bruteForceProtection } from '../middleware/bruteForceProtection.js';
+import * as gdpr from '../services/gdpr.js';
 
 export function setupRoutes(app, services) {
   const { auth, deviceManager, automationEngine, aiService, voiceControl, zigbeeProtocol, matterProtocol } = services;
@@ -368,6 +369,136 @@ export function setupRoutes(app, services) {
         return res.status(400).json({ error: 'Invalid action' });
       }
       res.json({ success: true, listening: voiceControl.isListening });
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ========== GDPR Compliance Routes ==========
+
+  // Export user data (GDPR Right to Portability)
+  app.get('/api/gdpr/export', authenticate, (req, res) => {
+    try {
+      // Users can export their own data, admins can export any user's data
+      const targetUserId = req.query.userId || req.user.id;
+
+      if (targetUserId !== req.user.id && req.user.role !== ROLES.ADMIN) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+
+      const dataExport = gdpr.exportUserData(targetUserId);
+
+      // Set headers for file download
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="user-data-export-${targetUserId}-${Date.now()}.json"`);
+
+      res.json(dataExport);
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Request data deletion (GDPR Right to be Forgotten)
+  app.delete('/api/gdpr/delete', authenticate, async (req, res) => {
+    try {
+      // Users can delete their own account, admins can delete any account
+      const targetUserId = req.body.userId || req.user.id;
+
+      if (targetUserId !== req.user.id && req.user.role !== ROLES.ADMIN) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+
+      // Require password confirmation for self-deletion
+      if (targetUserId === req.user.id && !req.body.password) {
+        return res.status(400).json({ error: 'Password confirmation required' });
+      }
+
+      // Verify password if self-deleting
+      if (targetUserId === req.user.id) {
+        const user = auth.getUserById(targetUserId);
+        const isValid = await auth.verifyPassword(req.body.password, user.password_hash);
+        if (!isValid) {
+          return res.status(401).json({ error: 'Invalid password' });
+        }
+      }
+
+      const result = gdpr.deleteUserData(targetUserId, req.user.id);
+
+      res.json({
+        success: true,
+        message: 'User data has been permanently deleted',
+        ...result
+      });
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Get user consents
+  app.get('/api/gdpr/consents', authenticate, (req, res) => {
+    try {
+      const consents = gdpr.getUserConsents(req.user.id);
+      res.json({ consents });
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Update user consent
+  app.post('/api/gdpr/consents', authenticate, (req, res) => {
+    try {
+      const { consentType, consentGiven } = req.body;
+
+      if (!consentType || typeof consentGiven !== 'boolean') {
+        return res.status(400).json({ error: 'Invalid consent data' });
+      }
+
+      // Validate consent type
+      if (!Object.values(gdpr.CONSENT_TYPES).includes(consentType)) {
+        return res.status(400).json({ error: 'Invalid consent type' });
+      }
+
+      // Cannot withdraw essential consent
+      if (consentType === gdpr.CONSENT_TYPES.ESSENTIAL && !consentGiven) {
+        return res.status(400).json({
+          error: 'Essential consent cannot be withdrawn. Please delete your account instead.'
+        });
+      }
+
+      const result = gdpr.recordConsent(
+        req.user.id,
+        consentType,
+        consentGiven,
+        req.ip,
+        req.headers['user-agent']
+      );
+
+      res.json({
+        success: true,
+        consent: result
+      });
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Get data processing history
+  app.get('/api/gdpr/processing-history', authenticate, (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit) || 100;
+      const history = gdpr.getDataProcessingHistory(req.user.id, limit);
+      res.json({ history });
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Get deletion requests (admin only)
+  app.get('/api/gdpr/deletion-requests', authenticate, requirePermission('user.delete'), (req, res) => {
+    try {
+      const status = req.query.status;
+      const requests = gdpr.getDeletionRequests(status);
+      res.json({ requests });
     } catch (error) {
       res.status(400).json({ error: error.message });
     }

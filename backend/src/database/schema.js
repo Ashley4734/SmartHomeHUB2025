@@ -219,6 +219,50 @@ export const SCHEMA = {
       last_attempt INTEGER NOT NULL,
       UNIQUE(identifier)
     )
+  `,
+
+  user_consents: `
+    CREATE TABLE IF NOT EXISTS user_consents (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      consent_type TEXT NOT NULL,
+      consent_given INTEGER NOT NULL DEFAULT 0,
+      consent_version TEXT NOT NULL,
+      ip_address TEXT,
+      user_agent TEXT,
+      given_at INTEGER,
+      withdrawn_at INTEGER,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `,
+
+  data_processing_log: `
+    CREATE TABLE IF NOT EXISTS data_processing_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL,
+      processing_type TEXT NOT NULL,
+      purpose TEXT NOT NULL,
+      data_categories TEXT NOT NULL,
+      legal_basis TEXT NOT NULL,
+      recipient TEXT,
+      timestamp INTEGER NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `,
+
+  data_deletion_requests: `
+    CREATE TABLE IF NOT EXISTS data_deletion_requests (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      request_type TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      requested_at INTEGER NOT NULL,
+      processed_at INTEGER,
+      processed_by TEXT,
+      notes TEXT
+    )
   `
 };
 
@@ -241,5 +285,11 @@ export const INDEXES = [
   'CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(read)',
   'CREATE INDEX IF NOT EXISTS idx_auth_audit_user ON auth_audit_log(user_id)',
   'CREATE INDEX IF NOT EXISTS idx_auth_audit_timestamp ON auth_audit_log(timestamp)',
-  'CREATE INDEX IF NOT EXISTS idx_failed_login_identifier ON failed_login_attempts(identifier)'
+  'CREATE INDEX IF NOT EXISTS idx_failed_login_identifier ON failed_login_attempts(identifier)',
+  'CREATE INDEX IF NOT EXISTS idx_user_consents_user ON user_consents(user_id)',
+  'CREATE INDEX IF NOT EXISTS idx_user_consents_type ON user_consents(consent_type)',
+  'CREATE INDEX IF NOT EXISTS idx_data_processing_log_user ON data_processing_log(user_id)',
+  'CREATE INDEX IF NOT EXISTS idx_data_processing_log_timestamp ON data_processing_log(timestamp)',
+  'CREATE INDEX IF NOT EXISTS idx_data_deletion_requests_user ON data_deletion_requests(user_id)',
+  'CREATE INDEX IF NOT EXISTS idx_data_deletion_requests_status ON data_deletion_requests(status)'
 ];

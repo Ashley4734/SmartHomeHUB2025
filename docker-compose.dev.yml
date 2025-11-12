@@ -1,0 +1,85 @@
+version: '3.8'
+
+services:
+  # Backend API Service (Development)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: development
+    container_name: smart-home-backend-dev
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+      - "9229:9229"  # Node.js debugging port
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - HOST=0.0.0.0
+      - DB_PATH=/app/data/smart-home.db
+      - LOG_LEVEL=debug
+      - CORS_ORIGIN=http://localhost:5173
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+      - backend-data-dev:/app/data
+      - backend-logs-dev:/app/logs
+    networks:
+      - smart-home-network-dev
+    command: npm run dev
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Frontend Web Service (Development)
+  frontend:
+    build:
+      context: ./frontend/web
+      dockerfile: Dockerfile
+      target: development
+    container_name: smart-home-frontend-dev
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    environment:
+      - NODE_ENV=development
+      - VITE_API_URL=http://localhost:3000
+    volumes:
+      - ./frontend/web:/app
+      - /app/node_modules
+    networks:
+      - smart-home-network-dev
+    depends_on:
+      - backend
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Redis for caching
+  redis:
+    image: redis:7-alpine
+    container_name: smart-home-redis-dev
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    networks:
+      - smart-home-network-dev
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  smart-home-network-dev:
+    driver: bridge
+
+volumes:
+  backend-data-dev:
+    driver: local
+  backend-logs-dev:
+    driver: local

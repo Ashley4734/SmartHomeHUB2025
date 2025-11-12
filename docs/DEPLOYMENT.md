@@ -196,6 +196,96 @@ docker-compose down
 docker-compose down -v
 ```
 
+## CI/CD Setup
+
+### GitHub Actions Configuration
+
+The project includes an automated CI/CD pipeline via GitHub Actions (`.github/workflows/ci-cd.yml`) that:
+- Runs linting and tests on all pull requests
+- Builds and pushes Docker images to Docker Hub
+- Deploys to staging (develop branch) and production (main branch)
+
+### Required GitHub Secrets
+
+To enable the CI/CD pipeline, you need to configure the following repository secrets:
+
+#### Docker Hub Credentials
+
+1. **Navigate to repository settings**:
+   - Go to your GitHub repository
+   - Click on **Settings** > **Secrets and variables** > **Actions**
+   - Click **New repository secret**
+
+2. **Add DOCKER_USERNAME**:
+   - Name: `DOCKER_USERNAME`
+   - Value: Your Docker Hub username
+   - Click **Add secret**
+
+3. **Add DOCKER_PASSWORD**:
+   - Name: `DOCKER_PASSWORD`
+   - Value: Your Docker Hub password or access token (recommended)
+   - Click **Add secret**
+
+#### Creating a Docker Hub Access Token (Recommended)
+
+Using an access token instead of your password is more secure:
+
+1. Log in to [Docker Hub](https://hub.docker.com/)
+2. Go to **Account Settings** > **Security** > **Access Tokens**
+3. Click **New Access Token**
+4. Give it a description (e.g., "GitHub Actions CI/CD")
+5. Set permissions: **Read, Write, Delete**
+6. Click **Generate**
+7. Copy the token and use it as `DOCKER_PASSWORD` in GitHub secrets
+
+### Verifying CI/CD Setup
+
+After configuring the secrets:
+
+1. **Push to a feature branch**:
+   ```bash
+   git checkout -b feature/test-cicd
+   git commit --allow-empty -m "Test CI/CD pipeline"
+   git push origin feature/test-cicd
+   ```
+
+2. **Create a pull request** to `develop` or `main`
+
+3. **Check Actions tab**:
+   - Go to your repository
+   - Click on **Actions**
+   - You should see the workflow running
+   - Verify all jobs complete successfully
+
+### Troubleshooting CI/CD
+
+#### Docker Login Failed: "Username and password required"
+
+**Cause**: GitHub secrets `DOCKER_USERNAME` or `DOCKER_PASSWORD` are not set.
+
+**Solution**:
+1. Verify secrets are configured in repository settings
+2. Ensure secret names match exactly: `DOCKER_USERNAME` and `DOCKER_PASSWORD`
+3. Check that the Docker Hub access token has not expired
+4. Verify the username is correct (not email address)
+
+#### Docker Push Failed: "denied: requested access to the resource is denied"
+
+**Cause**: Insufficient permissions or incorrect repository name.
+
+**Solution**:
+1. Ensure your Docker Hub account has permission to push to the repository
+2. Update the image names in `.github/workflows/ci-cd.yml` to match your Docker Hub username
+3. Verify the access token has write permissions
+
+#### Build Fails on Main/Develop Branch
+
+**Cause**: The build-docker job only runs on pushes to `main` or `develop` branches.
+
+**Solution**:
+- Feature branches will only run tests, not build Docker images
+- Merge to `develop` or `main` to trigger Docker builds
+
 ## Production Deployment
 
 ### Pre-Deployment Checklist

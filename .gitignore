@@ -1,0 +1,59 @@
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+backend/data/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Build outputs
+dist/
+build/
+out/
+.cache/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Zigbee
+backend/data/zigbee/
+
+# Matter
+backend/data/matter/
+
+# AI models (if storing locally)
+backend/models/
+
+# Certificates
+*.pem
+*.key
+*.crt

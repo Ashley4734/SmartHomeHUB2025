@@ -8,8 +8,13 @@ import { v4 as uuidv4 } from 'uuid';
 import { getDatabase } from '../database/db.js';
 import { recordFailedAttempt, resetFailedAttempts, logAuthEvent } from '../middleware/bruteForceProtection.js';
 import { recordConsent, CONSENT_TYPES } from '../services/gdpr.js';
+import config from '../utils/config.js';
 
 const SALT_ROUNDS = 10;
+
+// Use JWT_SECRET from config (which has defaults) or environment variable
+const JWT_SECRET = config.jwtSecret || process.env.JWT_SECRET || 'test-secret-do-not-use-in-production';
+const JWT_EXPIRES_IN = config.jwtExpiresIn || process.env.JWT_EXPIRES_IN || '7d';
 
 // User roles with permissions
 export const ROLES = {
@@ -70,8 +75,8 @@ export function generateToken(user) {
     role: user.role
   };
 
-  return jwt.sign(payload, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRES_IN || '7d'
+  return jwt.sign(payload, JWT_SECRET, {
+    expiresIn: JWT_EXPIRES_IN
   });
 }
 
@@ -80,9 +85,16 @@ export function generateToken(user) {
  */
 export function verifyToken(token) {
   try {
-    return jwt.verify(token, process.env.JWT_SECRET);
+    return jwt.verify(token, JWT_SECRET);
   } catch (error) {
-    throw new Error('Invalid or expired token');
+    // Provide more specific error messages
+    if (error.name === 'TokenExpiredError') {
+      throw new Error('Token expired');
+    } else if (error.name === 'JsonWebTokenError') {
+      throw new Error('Invalid token format');
+    } else {
+      throw new Error('Invalid or expired token');
+    }
   }
 }
 

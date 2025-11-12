@@ -56,7 +56,10 @@ export function closeTestDatabase() {
 export function cleanTestDatabase() {
   if (!testDatabase) return;
 
+  // Tables must be deleted in order to respect foreign key constraints
+  // Delete child tables first, then parent tables
   const tables = [
+    // Tables with FK to users and other tables (delete first)
     'voice_commands',
     'user_patterns',
     'ai_suggestions',
@@ -65,13 +68,22 @@ export function cleanTestDatabase() {
     'device_history',
     'scenes',
     'automations',
-    'devices',
-    'rooms',
     'notifications',
+    'user_consents',
+    'data_processing_log',
+
+    // Tables with FK to devices
+    'devices',
+
+    // Tables with no FK dependencies
+    'rooms',
     'auth_audit_log',
     'failed_login_attempts',
-    'users',
-    'system_settings'
+    'data_deletion_requests',
+    'system_settings',
+
+    // Parent tables (delete last)
+    'users'
   ];
 
   tables.forEach(table => {

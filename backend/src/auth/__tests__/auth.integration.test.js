@@ -22,11 +22,14 @@ describe('Auth Module - Integration Tests', () => {
   });
 
   beforeEach(() => {
-    // Clean up users table before each test
+    // Clean up tables in correct order to respect foreign key constraints
+    // Delete child tables first, then parent tables
     const db = getDatabase();
-    db.prepare('DELETE FROM users').run();
+    db.prepare('DELETE FROM user_consents').run();
+    db.prepare('DELETE FROM data_processing_log').run();
     db.prepare('DELETE FROM auth_audit_log').run();
     db.prepare('DELETE FROM failed_login_attempts').run();
+    db.prepare('DELETE FROM users').run();
   });
 
   describe('Password Hashing', () => {

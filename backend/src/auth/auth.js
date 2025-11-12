@@ -6,6 +6,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 import { getDatabase } from '../database/db.js';
+import { recordFailedAttempt, resetFailedAttempts, logAuthEvent } from '../middleware/bruteForceProtection.js';
 
 const SALT_ROUNDS = 10;
 
@@ -119,9 +120,9 @@ export async function createUser({ username, email, password, role = ROLES.USER,
 }
 
 /**
- * Authenticate user
+ * Authenticate user with brute force protection
  */
-export async function authenticateUser(usernameOrEmail, password) {
+export async function authenticateUser(usernameOrEmail, password, ipAddress = null, userAgent = null) {
   const db = getDatabase();
 
   // Find user
@@ -132,17 +133,57 @@ export async function authenticateUser(usernameOrEmail, password) {
   `).get(usernameOrEmail, usernameOrEmail);
 
   if (!user) {
+    // Record failed attempt even if user doesn't exist (to prevent user enumeration)
+    recordFailedAttempt(usernameOrEmail);
+
+    // Log failed auth attempt
+    logAuthEvent({
+      username: usernameOrEmail,
+      eventType: 'login_failed',
+      ipAddress,
+      userAgent,
+      success: false,
+      errorMessage: 'User not found'
+    });
+
     throw new Error('Invalid credentials');
   }
 
   // Verify password
   const isValid = await verifyPassword(password, user.password_hash);
   if (!isValid) {
+    // Record failed attempt
+    recordFailedAttempt(user.username);
+
+    // Log failed auth attempt
+    logAuthEvent({
+      userId: user.id,
+      username: user.username,
+      eventType: 'login_failed',
+      ipAddress,
+      userAgent,
+      success: false,
+      errorMessage: 'Invalid password'
+    });
+
     throw new Error('Invalid credentials');
   }
 
+  // Reset failed attempts on successful login
+  resetFailedAttempts(user.username);
+
   // Update last login
   db.prepare('UPDATE users SET last_login = ? WHERE id = ?').run(Date.now(), user.id);
+
+  // Log successful login
+  logAuthEvent({
+    userId: user.id,
+    username: user.username,
+    eventType: 'login_success',
+    ipAddress,
+    userAgent,
+    success: true
+  });
 
   // Generate token
   const token = generateToken(user);

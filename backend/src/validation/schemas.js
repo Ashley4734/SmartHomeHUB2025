@@ -11,10 +11,20 @@ export const registerSchema = z.object({
   role: z.enum(['admin', 'user', 'guest']).optional(),
 });
 
-export const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
-});
+export const loginSchema = z
+  .object({
+    identifier: z.string().min(1).max(100).optional(),
+    username: z.string().min(1).max(100).optional(),
+    email: z.string().email().optional(),
+    password: z.string().min(1),
+  })
+  .refine(
+    (data) => data.identifier || data.username || data.email,
+    {
+      message: 'Username or email is required',
+      path: ['identifier'],
+    }
+  );
 
 export const updateUserSchema = z.object({
   username: z.string().min(3).max(50).optional(),

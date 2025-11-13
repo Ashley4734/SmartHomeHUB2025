@@ -4,7 +4,7 @@
 
 import express from 'express';
 import { authenticate, requirePermission, ROLES } from '../auth/auth.js';
-import { csrfProtection, csrfTokenEndpoint } from '../middleware/csrf.js';
+import { csrfProtection } from '../middleware/csrf.js';
 import { authRateLimiter, aiRateLimiter } from '../middleware/rateLimiting.js';
 import { bruteForceProtection } from '../middleware/bruteForceProtection.js';
 import * as gdpr from '../services/gdpr.js';
@@ -21,8 +21,7 @@ export function setupRoutes(app, services) {
     });
   });
 
-  // CSRF token endpoint - must be called before making state-changing requests
-  app.get('/api/csrf-token', csrfTokenEndpoint);
+  // Note: CSRF token endpoint is registered in index.js before CSRF middleware
 
   // ========== Authentication Routes ==========
 

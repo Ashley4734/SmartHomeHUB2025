@@ -8,12 +8,9 @@ import logger from '../utils/logger.js';
 /**
  * Configure CSRF protection
  */
-const {
-  generateToken,
-  doubleCsrfProtection,
-} = doubleCsrf({
+const doubleCsrfUtil = doubleCsrf({
   getSecret: () => process.env.CSRF_SECRET || process.env.JWT_SECRET || 'csrf-secret-change-in-production',
-  cookieName: '__Host-psifi.x-csrf-token',
+  cookieName: process.env.NODE_ENV === 'production' ? '__Host-psifi.x-csrf-token' : 'x-csrf-token',
   cookieOptions: {
     sameSite: 'strict',
     path: '/',
@@ -25,6 +22,11 @@ const {
   getTokenFromRequest: (req) => req.headers['x-csrf-token'],
 });
 
+const {
+  generateCsrfToken,
+  doubleCsrfProtection,
+} = doubleCsrfUtil;
+
 /**
  * CSRF protection middleware
  */
@@ -34,7 +36,7 @@ export const csrfProtection = doubleCsrfProtection;
  * Generate CSRF token endpoint middleware
  */
 export function csrfTokenEndpoint(req, res) {
-  const token = generateToken(req, res);
+  const token = generateCsrfToken(req, res);
   res.json({ csrfToken: token });
 }
 
@@ -59,13 +61,13 @@ export function csrfErrorHandler(err, req, res, next) {
 }
 
 /**
- * Export generateToken for use in other modules
+ * Export generateCsrfToken for use in other modules
  */
-export { generateToken };
+export { generateCsrfToken };
 
 export default {
   csrfProtection,
   csrfTokenEndpoint,
   csrfErrorHandler,
-  generateToken
+  generateCsrfToken
 };

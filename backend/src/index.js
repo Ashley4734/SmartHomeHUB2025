@@ -170,7 +170,7 @@ class SmartHomeHub {
   }
 
   /**
-   * Create default admin user with secure random password
+   * Create default admin user with default password (admin123)
    */
   async createDefaultAdmin() {
     try {
@@ -178,13 +178,13 @@ class SmartHomeHub {
       if (users.length === 0) {
         logger.info('Creating default admin user...');
 
-        // Generate a cryptographically secure random password
-        const randomPassword = crypto.randomBytes(16).toString('base64').slice(0, 20);
+        // Use default password for development
+        const defaultPassword = 'admin123';
 
         const admin = await auth.createUser({
           username: 'admin',
           email: 'admin@smarthome.local',
-          password: randomPassword,
+          password: defaultPassword,
           role: auth.ROLES.ADMIN,
           fullName: 'Administrator'
         });
@@ -193,13 +193,10 @@ class SmartHomeHub {
         logger.info('║             DEFAULT ADMIN CREDENTIALS                      ║');
         logger.info('╠════════════════════════════════════════════════════════════╣');
         logger.info(`║  Username: admin                                           ║`);
-        logger.info(`║  Password: ${randomPassword.padEnd(42, ' ')}║`);
+        logger.info(`║  Password: ${defaultPassword.padEnd(42, ' ')}║`);
         logger.info('╠════════════════════════════════════════════════════════════╣');
-        logger.warn('║  ⚠️  CRITICAL SECURITY NOTICE:                             ║');
-        logger.warn('║  1. This password is shown ONLY ONCE                       ║');
-        logger.warn('║  2. Store it securely immediately                          ║');
-        logger.warn('║  3. Change it after first login                            ║');
-        logger.warn('║  4. This message will not be shown again                   ║');
+        logger.warn('║  ⚠️  SECURITY NOTICE:                                      ║');
+        logger.warn('║  Change this password after first login                   ║');
         logger.info('╚════════════════════════════════════════════════════════════╝');
       }
     } catch (error) {

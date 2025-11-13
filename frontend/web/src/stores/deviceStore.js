@@ -1,7 +1,5 @@
 import { create } from 'zustand';
-import axios from 'axios';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+import axiosInstance from '../services/axiosInstance';
 
 export const useDeviceStore = create((set, get) => ({
   devices: [],
@@ -12,7 +10,7 @@ export const useDeviceStore = create((set, get) => ({
     set({ isLoading: true });
     try {
       const params = new URLSearchParams(filter);
-      const response = await axios.get(`${API_URL}/api/devices?${params}`);
+      const response = await axiosInstance.get(`/api/devices?${params}`);
       set({ devices: response.data.devices, isLoading: false });
     } catch (error) {
       set({ error: error.message, isLoading: false });
@@ -21,7 +19,7 @@ export const useDeviceStore = create((set, get) => ({
 
   controlDevice: async (deviceId, command, parameters = {}) => {
     try {
-      await axios.post(`${API_URL}/api/devices/${deviceId}/control`, {
+      await axiosInstance.post(`/api/devices/${deviceId}/control`, {
         command,
         parameters
       });

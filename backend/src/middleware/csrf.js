@@ -23,7 +23,7 @@ const doubleCsrfUtil = doubleCsrf({
 });
 
 const {
-  generateCsrfToken,
+  generateToken,
   doubleCsrfProtection,
 } = doubleCsrfUtil;
 
@@ -36,7 +36,7 @@ export const csrfProtection = doubleCsrfProtection;
  * Generate CSRF token endpoint middleware
  */
 export function csrfTokenEndpoint(req, res) {
-  const token = generateCsrfToken(req, res);
+  const token = generateToken(req, res);
   res.json({ csrfToken: token });
 }
 
@@ -61,13 +61,13 @@ export function csrfErrorHandler(err, req, res, next) {
 }
 
 /**
- * Export generateCsrfToken for use in other modules
+ * Export generateToken for use in other modules
  */
-export { generateCsrfToken };
+export { generateToken };
 
 export default {
   csrfProtection,
   csrfTokenEndpoint,
   csrfErrorHandler,
-  generateCsrfToken
+  generateToken
 };

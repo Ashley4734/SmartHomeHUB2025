@@ -1,0 +1,6 @@
+# Agent Notes
+
+## Frontend (`frontend/`)
+- Axios falls back to `http://localhost:3000` in development to prevent protocol mismatches when the frontend is served over HTTPS but the backend only exposes HTTP.
+- Set `VITE_API_URL` for non-development deployments where the API lives on a different origin.
+

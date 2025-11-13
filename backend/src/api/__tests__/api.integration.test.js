@@ -130,6 +130,20 @@ describe('API Integration Tests', () => {
       expect(response.body.user.username).toBe('user');
     });
 
+    test('POST /api/auth/login should authenticate using email', async () => {
+      const response = await request(app)
+        .post('/api/auth/login')
+        .send({
+          email: 'user@test.com',
+          password: 'user123'
+        })
+        .expect(200);
+
+      expect(response.body.user).toBeDefined();
+      expect(response.body.token).toBeDefined();
+      expect(response.body.user.email).toBe('user@test.com');
+    });
+
     test('POST /api/auth/login should reject wrong password', async () => {
       await request(app)
         .post('/api/auth/login')

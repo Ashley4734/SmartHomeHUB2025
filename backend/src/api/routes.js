@@ -8,6 +8,7 @@ import { csrfProtection } from '../middleware/csrf.js';
 import { authRateLimiter, aiRateLimiter } from '../middleware/rateLimiting.js';
 import { bruteForceProtection } from '../middleware/bruteForceProtection.js';
 import * as gdpr from '../services/gdpr.js';
+import { loginSchema } from '../validation/schemas.js';
 
 export function setupRoutes(app, services) {
   const { auth, deviceManager, automationEngine, aiService, voiceControl, zigbeeProtocol, matterProtocol } = services;
@@ -39,9 +40,17 @@ export function setupRoutes(app, services) {
   // Login - with stricter rate limiting and brute force protection
   app.post('/api/auth/login', authRateLimiter, bruteForceProtection, async (req, res) => {
     try {
-      const { username, password } = req.body;
+      const parsed = loginSchema.safeParse(req.body);
+
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.errors[0].message });
+      }
+
+      const { identifier, username, email, password } = parsed.data;
+      const userIdentifier = identifier || username || email;
+
       const result = await auth.authenticateUser(
-        username,
+        userIdentifier,
         password,
         req.ip,
         req.headers['user-agent']

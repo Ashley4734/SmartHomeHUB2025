@@ -17,11 +17,11 @@ export const useAuthStore = create(
         }
       },
 
-      login: async (username, password) => {
+      login: async (identifier, password) => {
         set({ isLoading: true, error: null });
         try {
           const response = await axiosInstance.post('/api/auth/login', {
-            username,
+            identifier,
             password
           });
 

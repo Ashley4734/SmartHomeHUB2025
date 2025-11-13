@@ -94,18 +94,28 @@ describe('Auth Schemas', () => {
   });
 
   describe('loginSchema', () => {
-    test('should validate correct login data', () => {
+    test('should validate username login', () => {
+      const valid = { username: 'user', password: 'password' };
+      expect(() => loginSchema.parse(valid)).not.toThrow();
+    });
+
+    test('should validate email login', () => {
       const valid = { email: 'test@example.com', password: 'password' };
       expect(() => loginSchema.parse(valid)).not.toThrow();
     });
 
-    test('should reject invalid email', () => {
-      const invalid = { email: 'not-an-email', password: 'password' };
-      expect(() => loginSchema.parse(invalid)).toThrow();
+    test('should validate identifier login', () => {
+      const valid = { identifier: 'user@example.com', password: 'password' };
+      expect(() => loginSchema.parse(valid)).not.toThrow();
+    });
+
+    test('should reject missing identifier fields', () => {
+      const invalid = { password: 'password' };
+      expect(() => loginSchema.parse(invalid)).toThrow('Username or email is required');
     });
 
     test('should reject empty password', () => {
-      const invalid = { email: 'test@example.com', password: '' };
+      const invalid = { username: 'user', password: '' };
       expect(() => loginSchema.parse(invalid)).toThrow();
     });
   });

@@ -238,13 +238,13 @@ export function resetFailedAttempts(identifier) {
  * Brute force protection middleware
  */
 export function bruteForceProtection(req, res, next) {
-  const identifier = req.body.username || req.ip;
+  const identifier = req.body.identifier || req.body.username || req.body.email || req.ip;
 
   if (isLocked(identifier)) {
     const remainingTime = getRemainingLockoutTime(identifier);
 
     logAuthEvent({
-      username: req.body.username,
+      username: req.body.username || req.body.email || req.body.identifier,
       eventType: 'login_blocked',
       ipAddress: req.ip,
       userAgent: req.headers['user-agent'],

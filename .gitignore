@@ -47,6 +47,9 @@ tmp/
 temp/
 *.tmp
 
+# Process ID files
+*.pid
+
 # Zigbee
 backend/data/zigbee/
 

@@ -63,11 +63,11 @@ else
 
     # Start backend
     echo -e "${GREEN}Starting backend...${NC}"
-    cd "$PROJECT_ROOT/backend"
-    nohup npm start > "$BACKEND_LOG" 2>&1 &
+    cd "$PROJECT_ROOT"
+    # Use setsid to create new session and fully detach
+    setsid "$SCRIPT_DIR/start-backend.sh" < /dev/null >> "$BACKEND_LOG" 2>&1 &
     BACKEND_PID=$!
     echo $BACKEND_PID > "$BACKEND_PID_FILE"
-    cd "$PROJECT_ROOT"
 
     # Wait for backend to start
     echo "Waiting for backend to start..."
@@ -99,11 +99,11 @@ else
 
     # Start frontend
     echo -e "${GREEN}Starting frontend...${NC}"
-    cd "$PROJECT_ROOT/frontend/web"
-    nohup npm run dev > "$FRONTEND_LOG" 2>&1 &
+    cd "$PROJECT_ROOT"
+    # Use setsid to create new session and fully detach
+    setsid "$SCRIPT_DIR/start-frontend.sh" < /dev/null >> "$FRONTEND_LOG" 2>&1 &
     FRONTEND_PID=$!
     echo $FRONTEND_PID > "$FRONTEND_PID_FILE"
-    cd "$PROJECT_ROOT"
 
     echo -e "${GREEN}✓ Frontend started (PID: $FRONTEND_PID)${NC}"
 fi

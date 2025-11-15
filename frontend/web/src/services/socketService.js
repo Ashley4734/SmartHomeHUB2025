@@ -1,7 +1,26 @@
 import { io } from 'socket.io-client';
 import { useDeviceStore } from '../stores/deviceStore';
 
-const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+// Dynamically determine socket URL based on environment
+// In production/development, connect to the same host the frontend is served from
+const getSocketURL = () => {
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+
+  // Use the current window location to construct the socket URL
+  // This ensures WebSocket connects to the correct server when accessed remotely
+  if (typeof window !== 'undefined') {
+    const protocol = window.location.protocol === 'https:' ? 'https' : 'http';
+    const host = window.location.hostname;
+    const port = '3000'; // Backend port
+    return `${protocol}://${host}:${port}`;
+  }
+
+  return 'http://localhost:3000';
+};
+
+const SOCKET_URL = getSocketURL();
 
 class SocketService {
   constructor() {

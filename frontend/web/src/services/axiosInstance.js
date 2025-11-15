@@ -2,10 +2,9 @@ import axios from 'axios';
 
 // Determine API base URL
 // Prefer explicit configuration via VITE_API_URL.
-// Fall back to the local backend during development to avoid protocol mismatches
-// (e.g. when the frontend is served over HTTPS but the backend only exposes HTTP).
-const API_URL =
-  import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:3000' : '');
+// In development, use empty string to go through Vite's proxy configuration
+// In production, use empty string to make relative requests (handled by nginx)
+const API_URL = import.meta.env.VITE_API_URL || '';
 
 // Create axios instance
 const axiosInstance = axios.create({

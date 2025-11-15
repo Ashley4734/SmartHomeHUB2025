@@ -29,8 +29,21 @@ sudo apt upgrade -y
 # Install Node.js
 echo "📦 Installing Node.js..."
 if ! command -v node &> /dev/null; then
-    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-    sudo apt-get install -y nodejs
+    # Try to install from NodeSource (recommended)
+    if curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -; then
+        sudo apt-get install -y nodejs
+    else
+        echo "⚠️  NodeSource repository unavailable, using Ubuntu's nodejs package..."
+        sudo apt-get install -y nodejs npm
+    fi
+else
+    echo "✓ Node.js already installed"
+fi
+
+# Ensure npm is installed
+if ! command -v npm &> /dev/null; then
+    echo "📦 Installing npm..."
+    sudo apt-get install -y npm
 fi
 
 echo "✓ Node.js version: $(node --version)"

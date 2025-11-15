@@ -11,7 +11,7 @@ import * as gdpr from '../services/gdpr.js';
 import { loginSchema } from '../validation/schemas.js';
 
 export function setupRoutes(app, services) {
-  const { auth, deviceManager, automationEngine, aiService, voiceControl, zigbeeProtocol, matterProtocol } = services;
+  const { auth, deviceManager, automationEngine, aiService, voiceControl, zigbeeProtocol, matterProtocol, wifiProtocol } = services;
 
   // Health check
   app.get('/api/health', (req, res) => {
@@ -206,6 +206,77 @@ export function setupRoutes(app, services) {
     try {
       const { pairingCode, deviceInfo } = req.body;
       const device = await matterProtocol.commissionDevice(pairingCode, deviceInfo);
+      res.json({ device });
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ========== WiFi/MQTT Protocol Routes ==========
+
+  // WiFi: Start device discovery
+  app.post('/api/protocols/wifi/discovery/start', authenticate, requirePermission('device.create'), async (req, res) => {
+    try {
+      const duration = parseInt(req.body.duration) || 30000;
+
+      if (!wifiProtocol) {
+        return res.status(400).json({ error: 'WiFi protocol not enabled' });
+      }
+
+      // Start discovery in background
+      wifiProtocol.startDiscovery(duration);
+
+      res.json({
+        success: true,
+        message: 'WiFi device discovery started',
+        duration
+      });
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // WiFi: Stop device discovery
+  app.post('/api/protocols/wifi/discovery/stop', authenticate, requirePermission('device.create'), (req, res) => {
+    try {
+      if (!wifiProtocol) {
+        return res.status(400).json({ error: 'WiFi protocol not enabled' });
+      }
+
+      wifiProtocol.stopDiscovery();
+      res.json({ success: true });
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // WiFi: Get discovered devices
+  app.get('/api/protocols/wifi/discovered', authenticate, requirePermission('device.read'), (req, res) => {
+    try {
+      if (!wifiProtocol) {
+        return res.status(400).json({ error: 'WiFi protocol not enabled' });
+      }
+
+      const devices = wifiProtocol.getDiscoveredDevices();
+      res.json({
+        devices,
+        isScanning: wifiProtocol.isScanning
+      });
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // WiFi: Pair discovered device
+  app.post('/api/protocols/wifi/pair', authenticate, requirePermission('device.create'), async (req, res) => {
+    try {
+      const { deviceId, name, type, roomId } = req.body;
+
+      if (!wifiProtocol) {
+        return res.status(400).json({ error: 'WiFi protocol not enabled' });
+      }
+
+      const device = await wifiProtocol.pairDevice(deviceId, { name, type, roomId });
       res.json({ device });
     } catch (error) {
       res.status(400).json({ error: error.message });

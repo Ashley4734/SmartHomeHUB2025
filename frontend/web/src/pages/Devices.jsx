@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useDeviceStore } from '../stores/deviceStore';
+import DeviceDiscovery from '../components/DeviceDiscovery';
 import {
   Lightbulb,
   Thermometer,
@@ -11,7 +12,8 @@ import {
   RefreshCw,
   Filter,
   Search,
-  AlertCircle
+  AlertCircle,
+  Wifi
 } from 'lucide-react';
 
 export default function Devices() {
@@ -19,6 +21,7 @@ export default function Devices() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [showDiscovery, setShowDiscovery] = useState(false);
 
   useEffect(() => {
     fetchDevices();
@@ -43,15 +46,35 @@ export default function Devices() {
     }
   };
 
+  const handleDeviceAdded = (device) => {
+    fetchDevices(); // Refresh device list
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Devices</h1>
-        <button className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 flex items-center gap-2">
-          <Plus className="w-4 h-4" />
-          Add Device
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowDiscovery(true)}
+            className="bg-purple-500 text-white px-4 py-2 rounded-lg hover:bg-purple-600 flex items-center gap-2"
+          >
+            <Wifi className="w-4 h-4" />
+            Discover WiFi
+          </button>
+          <button className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 flex items-center gap-2">
+            <Plus className="w-4 h-4" />
+            Add Device
+          </button>
+        </div>
       </div>
+
+      {/* Device Discovery Modal */}
+      <DeviceDiscovery
+        isOpen={showDiscovery}
+        onClose={() => setShowDiscovery(false)}
+        onDeviceAdded={handleDeviceAdded}
+      />
 
       {/* Filters and Search */}
       <div className="bg-white rounded-lg shadow p-4">

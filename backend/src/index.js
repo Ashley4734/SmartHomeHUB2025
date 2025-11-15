@@ -17,6 +17,7 @@ import DeviceManager from './core/deviceManager.js';
 import AIService from './ai/aiService.js';
 import ZigbeeProtocol from './protocols/zigbee.js';
 import MatterProtocol from './protocols/matter.js';
+import WiFiProtocol from './protocols/wifi.js';
 import AutomationEngine from './automation/automationEngine.js';
 import VoiceControl from './voice/voiceControl.js';
 import setupRoutes from './api/routes.js';
@@ -78,6 +79,15 @@ class SmartHomeHub {
         await this.services.matterProtocol.start();
       } else {
         logger.warn('⚠️  Matter protocol disabled');
+      }
+
+      // Initialize WiFi/MQTT protocol
+      if (process.env.WIFI_ENABLED !== 'false') {
+        this.services.wifiProtocol = new WiFiProtocol(this.services.deviceManager);
+        await this.services.wifiProtocol.start();
+        logger.info('✓ WiFi/MQTT protocol: Ready');
+      } else {
+        logger.warn('⚠️  WiFi/MQTT protocol disabled');
       }
 
       // Initialize automation engine

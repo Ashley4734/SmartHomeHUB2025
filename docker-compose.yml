@@ -17,7 +17,7 @@ services:
       - HOST=0.0.0.0
       - DB_PATH=/app/data/smart-home.db
       - LOG_LEVEL=info
-      - CORS_ORIGIN=http://localhost:8080
+      - CORS_ORIGIN=*
     volumes:
       - backend-data:/app/data
       - backend-logs:/app/logs
